@@ -1,0 +1,57 @@
+import argparse
+import pyshark
+import time
+
+# set up command line arguments
+parser = argparse.ArgumentParser(description='Reads a pcap file and outputs information about each packet.')
+parser.add_argument('file', metavar='file', type=str, help='the pcap file to read')
+parser.add_argument('-v', '--verbose', action='store_true', help='display verbose output')
+parser.add_argument('--filter', type=str, help='a display filter to apply to the packets')
+parser.add_argument('--decode-as', type=str, help='a decode as option to apply to the packets')
+
+args = parser.parse_args()
+
+# define file path
+file_path = args.file
+
+# define capture object
+capture = pyshark.FileCapture(file_path, display_filter=args.filter, decode_as=args.decode_as)
+
+print("reading from file: %s" % file_path)
+
+# set packet count
+packet_count = 0
+
+for packet in capture:
+    # adjusted output
+    try:
+        # get packet timestamp
+        packet_timestamp = packet.sniff_time
+        localtime = time.asctime(time.localtime(packet_timestamp.timestamp()))
+
+        # get packet content
+        protocol = packet.transport_layer   # protocol type
+        src_addr = packet.ip.src            # source address
+        src_port = packet[protocol].srcport   # source port
+        dst_addr = packet.ip.dst            # destination address
+        dst_port = packet[protocol].dstport   # destination port
+
+        # output packet info
+        print("%s IP %s:%s <-> %s:%s (%s)" % (localtime, src_addr, src_port, dst_addr, dst_port, protocol))
+
+        if args.verbose:
+            # output additional packet information
+            print("\tSource MAC: %s" % packet.eth.src)
+            print("\tDestination MAC: %s" % packet.eth.dst)
+            print("\tLength: %s" % packet.length)
+            print("\tInfo: %s" % packet.info)
+
+        packet_count += 1
+
+    except AttributeError as e:
+        # ignore packets other than TCP, UDP and IPv4
+        pass
+
+    print(" ")
+
+print("Analyzed %d packets." % packet_count)
